@@ -2,7 +2,7 @@
 // their own devices and everyone sees results update live.
 
 import { isConfigured, createPoll, watchPoll, submitVote, combineActivities } from "./store.js";
-import { UserError, sameText, scoreActivities, dateAvailability } from "./poll-logic.js";
+import { UserError, sameText, withoutEmoji, scoreActivities, dateAvailability } from "./poll-logic.js";
 
 // ---------- Helpers ----------
 
@@ -132,6 +132,78 @@ function route() {
   );
 }
 
+// ---------- Emoji picker for activity names ----------
+
+const ACTIVITY_EMOJI = [
+  "🎳", "🍕", "🍔", "🌮", "🍣", "🍜", "☕", "🍻", "🍷", "🍿", "🎬", "🎤",
+  "🎮", "🎲", "🧩", "⛳", "🏀", "⚽", "🎾", "🏓", "🥾", "🚴", "🏊", "🏖️",
+  "🎡", "🛍️", "🎨", "🎵", "🎭", "📚", "🧘", "🔥",
+];
+
+const LEADING_EMOJI = /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]+\s*)+/u;
+
+function leadingEmoji(text) {
+  const match = text.match(LEADING_EMOJI);
+  return match ? match[0].trim() : "";
+}
+
+function setLeadingEmoji(input, emoji) {
+  const rest = input.value.replace(LEADING_EMOJI, "");
+  input.value = emoji ? `${emoji} ${rest}` : rest;
+}
+
+// Adds an emoji button in front of `input` (inside `row`) that opens a grid of emoji below the row.
+function attachEmojiPicker(row, input) {
+  const button = el("button", { type: "button", class: "emoji-btn", "aria-expanded": "false" });
+  const panel = el("div", { class: "emoji-panel", role: "group", "aria-label": "Choose an emoji" });
+  panel.hidden = true;
+
+  const update = () => {
+    const current = leadingEmoji(input.value);
+    button.textContent = current || "☺";
+    button.classList.toggle("empty", !current);
+    button.setAttribute("aria-label", current ? `Change emoji (now ${current})` : "Add an emoji");
+  };
+  const close = () => {
+    panel.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  };
+  const choose = (emoji) => {
+    setLeadingEmoji(input, emoji);
+    update();
+    close();
+    input.focus();
+  };
+
+  for (const emoji of ACTIVITY_EMOJI) {
+    const option = el("button", { type: "button", class: "emoji-option", "aria-label": emoji, text: emoji });
+    option.addEventListener("click", () => choose(emoji));
+    panel.append(option);
+  }
+  const none = el("button", { type: "button", class: "emoji-option emoji-none", text: "No emoji" });
+  none.addEventListener("click", () => choose(""));
+  panel.append(none);
+
+  button.addEventListener("click", () => {
+    const opening = panel.hidden;
+    panel.hidden = !opening;
+    button.setAttribute("aria-expanded", String(opening));
+    if (opening) panel.querySelector("button").focus();
+  });
+  panel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      close();
+      button.focus();
+    }
+  });
+  input.addEventListener("input", update);
+
+  row.prepend(button);
+  row.after(panel);
+  update();
+  return { update, close, panel };
+}
+
 // ---------- Home: create poll ----------
 
 function addInputRow(container, type, placeholder) {
@@ -139,8 +211,10 @@ function addInputRow(container, type, placeholder) {
   if (type === "text") input.maxLength = 60;
   const remove = el("button", { type: "button", class: "remove-btn", "aria-label": "Remove", text: "×" });
   const row = el("div", { class: "input-row" }, input, remove);
-  remove.addEventListener("click", () => row.remove());
-  container.append(row);
+  const wrap = el("div", { class: "input-wrap" }, row);
+  container.append(wrap);
+  if (type === "text") attachEmojiPicker(row, input);
+  remove.addEventListener("click", () => wrap.remove());
 }
 
 function resetCreateForm() {
@@ -185,6 +259,7 @@ $("create-form").addEventListener("submit", async (event) => {
   let error = "";
   if (!title) error = "Please give your poll a title.";
   else if (dates.length === 0) error = "Please add at least one date/time option.";
+  else if (activities.some((name) => !withoutEmoji(name))) error = "Give each activity a name, not just an emoji.";
   if (error) return showMessage($("create-error"), error);
 
   showMessage($("create-error"), "");
@@ -272,16 +347,20 @@ function syncDraft(poll) {
   if (before !== after) renderRanking();
 }
 
+const suggestionPicker = attachEmojiPicker($("suggestion-row"), $("suggestion"));
+
 function addSuggestion() {
   const input = $("suggestion");
   const name = input.value.trim();
   showMessage($("suggestion-error"), "");
   if (!name) return;
-  if (draftRanking.some((item) => sameText(item.name, name))) {
-    return showMessage($("suggestion-error"), `"${name}" is already on the list.`);
-  }
+  if (!withoutEmoji(name)) return showMessage($("suggestion-error"), "Give your idea a name, not just an emoji.");
+  const existing = draftRanking.find((item) => sameText(item.name, name));
+  if (existing) return showMessage($("suggestion-error"), `"${existing.name}" is already on the list.`);
   draftRanking.push({ name, isNew: true });
   input.value = "";
+  suggestionPicker.update();
+  suggestionPicker.close();
   renderRanking();
   input.focus();
 }
@@ -294,24 +373,87 @@ $("suggestion").addEventListener("keydown", (event) => {
   }
 });
 
-function renderDateChoices(poll) {
+// The voter's date choices while they fill in the form.
+// Each item is { date, checked, isNew } where isNew marks the voter's own suggested time.
+let draftDates = [];
+
+function renderDateChoices() {
   const container = $("date-choices");
   container.innerHTML = "";
-  poll.dates.forEach((date, index) => {
-    container.append(el("label", {},
-      el("input", { type: "checkbox", name: "date", value: String(index) }),
-      el("span", { text: formatDate(date) })
-    ));
-  });
+  draftDates.sort((a, b) => a.date.localeCompare(b.date));
+  for (const item of draftDates) {
+    const box = el("input", { type: "checkbox", name: "date", value: item.date });
+    box.checked = item.checked;
+    box.addEventListener("change", () => { item.checked = box.checked; });
+
+    const text = el("span", { class: "rank-name", text: formatDate(item.date) });
+    if (item.isNew) text.append(el("span", { class: "tag", text: "your time" }));
+    const label = el("label", {}, box, text);
+
+    if (item.isNew) {
+      const remove = el("button", { type: "button", class: "icon-btn", "aria-label": `Remove ${formatDate(item.date)}`, text: "×" });
+      remove.addEventListener("click", (event) => {
+        event.preventDefault();
+        draftDates = draftDates.filter((d) => d !== item);
+        renderDateChoices();
+      });
+      label.append(remove);
+    }
+    container.append(label);
+  }
 }
+
+// Keeps the voter's ticks when other people suggest dates: new dates appear unticked.
+function syncDraftDates(poll) {
+  let changed = false;
+  for (const item of draftDates) {
+    if (item.isNew && poll.dates.includes(item.date)) {
+      item.isNew = false;
+      changed = true;
+    }
+  }
+  for (const date of poll.dates) {
+    if (!draftDates.some((d) => d.date === date)) {
+      draftDates.push({ date, checked: false, isNew: false });
+      changed = true;
+    }
+  }
+  if (changed) renderDateChoices();
+}
+
+function addDateSuggestion() {
+  const input = $("date-suggestion");
+  const value = input.value;
+  showMessage($("date-suggestion-error"), "");
+  if (!value) return showMessage($("date-suggestion-error"), "Pick a date and time first.");
+  if (draftDates.some((d) => d.date === value)) {
+    return showMessage($("date-suggestion-error"), `${formatDate(value)} is already on the list.`);
+  }
+  draftDates.push({ date: value, checked: true, isNew: true });
+  input.value = "";
+  renderDateChoices();
+}
+
+$("add-date-suggestion").addEventListener("click", addDateSuggestion);
+$("date-suggestion").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addDateSuggestion();
+  }
+});
 
 function resetVoteForm(poll) {
   $("voter-name").value = "";
   $("suggestion").value = "";
+  suggestionPicker.update();
+  suggestionPicker.close();
+  $("date-suggestion").value = "";
   draftRanking = poll.activities.map((activity) => ({ name: activity.name, isNew: false }));
   renderRanking();
-  for (const box of document.querySelectorAll('input[name="date"]')) box.checked = false;
+  draftDates = poll.dates.map((date) => ({ date, checked: false, isNew: false }));
+  renderDateChoices();
   showMessage($("suggestion-error"), "");
+  showMessage($("date-suggestion-error"), "");
   showMessage($("vote-error"), "");
 }
 
@@ -319,7 +461,6 @@ function resetVoteForm(poll) {
 function renderPoll(poll) {
   $("poll-heading").textContent = poll.title;
   document.title = `${poll.title} · Hangout Poll`;
-  renderDateChoices(poll);
   resetVoteForm(poll);
   showMessage($("vote-success"), "");
   showMessage($("merge-success"), "");
@@ -331,6 +472,7 @@ function renderPoll(poll) {
 // Someone (maybe this person) changed the poll: update without wiping the form.
 function refreshPoll(poll) {
   syncDraft(poll);
+  syncDraftDates(poll);
   renderResults(poll);
   renderMerge(poll, false);
 }
@@ -348,6 +490,9 @@ $("vote-form").addEventListener("submit", async (event) => {
   if ($("suggestion").value.trim()) {
     return showMessage($("vote-error"), "You typed an idea but didn't add it. Click Add, or clear the box.");
   }
+  if ($("date-suggestion").value) {
+    return showMessage($("vote-error"), "You picked a time but didn't add it. Click Add next to it, or clear it.");
+  }
   showMessage($("vote-error"), "");
 
   const button = $("vote-submit");
@@ -357,7 +502,7 @@ $("vote-form").addEventListener("submit", async (event) => {
     await submitVote(currentPoll.id, {
       name,
       rankedNames: draftRanking.map((item) => item.name),
-      dates: [...document.querySelectorAll('input[name="date"]:checked')].map((box) => Number(box.value)),
+      freeDates: draftDates.filter((item) => item.checked).map((item) => item.date),
     });
     resetVoteForm(currentPoll);
     showMessage($("vote-success"), `Thanks, ${name}! Your vote is saved.`);
@@ -421,17 +566,20 @@ function renderDateResults(availability, bestIndexes) {
   const list = $("date-results");
   list.innerHTML = "";
   for (const day of availability) {
-    const total = day.free.length + day.busy.length;
+    const total = day.free.length + day.busy.length + day.unanswered.length;
     const heading = el("span", { class: "tally-label", text: formatDate(day.date) });
     const isBest = bestIndexes.includes(day.index);
     if (isBest) heading.append(el("span", { class: "tag", text: "best" }));
 
-    list.append(el("li", { class: isBest ? "top" : "" },
+    const item = el("li", { class: isBest ? "top" : "" },
       el("div", { class: "tally-row" },
         heading,
         el("span", { class: "muted num", text: `${day.free.length} of ${total} free` })
       ),
-      bar(total ? day.free.length / total : 0),
+      bar(total ? day.free.length / total : 0)
+    );
+    if (day.by) item.append(el("div", { class: "muted small", text: `Suggested by ${day.by}` }));
+    item.append(
       el("div", { class: "who" },
         el("span", { class: "free", text: "Free: " }),
         el("span", { text: day.free.length ? day.free.join(", ") : "no one" })
@@ -440,7 +588,14 @@ function renderDateResults(availability, bestIndexes) {
         el("span", { class: "busy", text: "Can't make it: " }),
         el("span", { text: day.busy.length ? day.busy.join(", ") : "no one" })
       )
-    ));
+    );
+    if (day.unanswered.length) {
+      item.append(el("div", { class: "who" },
+        el("span", { class: "busy", text: "Hasn't answered: " }),
+        el("span", { text: day.unanswered.join(", ") })
+      ));
+    }
+    list.append(item);
   }
 }
 

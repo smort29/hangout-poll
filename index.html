@@ -60,7 +60,7 @@
             <ol id="ranking-list" class="ranking"></ol>
 
             <label for="suggestion" class="sub-label">Have another idea?</label>
-            <div class="input-row">
+            <div class="input-row" id="suggestion-row">
               <input id="suggestion" type="text" placeholder="e.g. Mini golf" maxlength="60">
               <button type="button" class="secondary" id="add-suggestion">Add</button>
             </div>
@@ -70,6 +70,13 @@
           <fieldset>
             <legend>Which dates work for you?</legend>
             <div id="date-choices" class="choices"></div>
+
+            <label for="date-suggestion" class="sub-label">None of these work? Suggest a time</label>
+            <div class="input-row">
+              <input id="date-suggestion" type="datetime-local">
+              <button type="button" class="secondary" id="add-date-suggestion">Add</button>
+            </div>
+            <p id="date-suggestion-error" class="error" hidden></p>
           </fieldset>
 
           <p id="vote-error" class="error" hidden></p>
@@ -100,6 +107,7 @@
           <ol id="activity-results" class="tally"></ol>
 
           <h3>Who is free when</h3>
+          <p class="hint">Dates suggested after you voted show you as "hasn't answered" rather than "can't make it".</p>
           <ol id="date-results" class="tally"></ol>
 
           <h3>Everyone's rankings</h3>

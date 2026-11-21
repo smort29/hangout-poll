@@ -29,6 +29,9 @@
 
 * { box-sizing: border-box; }
 
+/* Anything marked hidden stays hidden, even if a rule below gives it a display style. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -336,6 +339,53 @@ select {
 .confirm-actions .primary { margin-top: 0; width: auto; padding: 8px 16px; }
 .confirm-actions .secondary { padding: 8px 16px; }
 .primary.danger { background: var(--error); color: var(--on-accent); }
+
+/* ---------- Emoji picker ---------- */
+
+.input-wrap { display: grid; gap: 6px; }
+
+.emoji-btn {
+  flex: none;
+  width: 40px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emoji-btn.empty { color: var(--muted); }
+
+.emoji-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.emoji-option {
+  height: 40px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+.emoji-option:hover { background: var(--accent-soft); }
+
+.emoji-none {
+  grid-column: 1 / -1;
+  height: 32px;
+  font-size: 0.875rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
 
 #rankings-table td:last-child,
 #rankings-table th:last-child { text-align: left; white-space: pre; }

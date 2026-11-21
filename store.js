@@ -32,6 +32,7 @@ export async function createPoll({ title, dates, activities }) {
     title,
     createdAt: Date.now(),
     dates,
+    dateBy: dates.map(() => null),
     activities: activities.map((name) => ({ name, by: null })),
     votes: [],
   });
@@ -65,7 +66,9 @@ async function change(id, update) {
     const snap = await tx.get(pollRef(id));
     if (!snap.exists()) throw new Error("This poll no longer exists.");
     const poll = update(snap.data());
-    tx.update(pollRef(id), { activities: poll.activities, votes: poll.votes });
+    const changes = { activities: poll.activities, votes: poll.votes, dates: poll.dates };
+    if (poll.dateBy) changes.dateBy = poll.dateBy;
+    tx.update(pollRef(id), changes);
   });
 }
 

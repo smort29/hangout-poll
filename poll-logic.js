@@ -1,21 +1,40 @@
 // Pure rules for changing a poll. No Firebase or page code here, so they're easy to test.
 //
 // Poll shape (one Firestore document per poll):
-//   { title, createdAt, dates: [isoString], activities: [{ name, by }], votes: [vote] }
-//   vote = { name, ranking: [activityIndex, ...favorite first], dates: [dateIndex] }
-//   `by` is the voter who suggested the activity, or null if the organizer added it.
+//   { title, createdAt, dates: [isoString], dateBy: [name|null], activities: [{ name, by }], votes: [vote] }
+//   vote = { name, ranking: [activityIndex, ...favorite first], dates: [dateIndex], datesSeen }
+//   `by` / `dateBy` name the voter who suggested an activity or date, or null if the organizer added it.
+//   Dates are only ever appended, so indexes never change. `datesSeen` is how many dates existed
+//   when the person voted: dates added later count as "hasn't answered", not "can't make it".
 
 export class UserError extends Error {}
 
-export const sameText = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+// Removes emoji so "🎳 Bowling" and "bowling" count as the same activity.
+export const withoutEmoji = (text) =>
+  text.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/\s+/g, " ").trim();
+
+export const sameText = (a, b) => withoutEmoji(a).toLowerCase() === withoutEmoji(b).toLowerCase();
 
 export function findActivity(poll, name) {
   return poll.activities.findIndex((activity) => sameText(activity.name, name));
 }
 
+// Who added each date. Polls made before date suggestions existed have no `dateBy`.
+export function dateSuggester(poll, index) {
+  return (poll.dateBy && poll.dateBy[index]) || null;
+}
+
+// How many dates a vote was able to answer. Votes from before date suggestions existed
+// saw only the organizer's dates.
+export function datesSeen(poll, vote) {
+  if (typeof vote.datesSeen === "number") return vote.datesSeen;
+  return poll.dates.filter((_, i) => dateSuggester(poll, i) === null).length;
+}
+
 // Adds a vote. `rankedNames` is the voter's order, favorite first; names not yet
-// in the poll become new suggestions credited to the voter.
-export function addVote(poll, { name, rankedNames, dates }) {
+// in the poll become new suggestions credited to the voter. `freeDates` are the
+// date/time values the voter can make; ones not yet in the poll are added as suggestions.
+export function addVote(poll, { name, rankedNames, freeDates }) {
   if (poll.votes.some((vote) => sameText(vote.name, name))) {
     throw new UserError(`"${name}" has already voted on this poll. Try a different name.`);
   }
@@ -28,8 +47,19 @@ export function addVote(poll, { name, rankedNames, dates }) {
     }
     if (!ranking.includes(index)) ranking.push(index);
   }
-  const validDates = [...new Set(dates)].filter((i) => i >= 0 && i < poll.dates.length);
-  poll.votes.push({ name, ranking, dates: validDates });
+  if (!poll.dateBy) poll.dateBy = poll.dates.map(() => null);
+  const dates = [];
+  for (const value of freeDates) {
+    let index = poll.dates.indexOf(value);
+    if (index === -1) {
+      poll.dates.push(value);
+      poll.dateBy.push(name);
+      index = poll.dates.length - 1;
+    }
+    if (!dates.includes(index)) dates.push(index);
+  }
+
+  poll.votes.push({ name, ranking, dates, datesSeen: poll.dates.length });
   return poll;
 }
 
@@ -74,11 +104,17 @@ export function scoreActivities(poll) {
     b.points - a.points || b.firsts.length - a.firsts.length || a.index - b.index);
 }
 
+// Free / can't make it / hasn't answered for each date, earliest date first.
 export function dateAvailability(poll) {
-  return poll.dates.map((date, index) => ({
-    date,
-    index,
-    free: poll.votes.filter((v) => v.dates.includes(index)).map((v) => v.name),
-    busy: poll.votes.filter((v) => !v.dates.includes(index)).map((v) => v.name),
-  }));
+  return poll.dates
+    .map((date, index) => {
+      const free = [], busy = [], unanswered = [];
+      for (const vote of poll.votes) {
+        if (vote.dates.includes(index)) free.push(vote.name);
+        else if (index < datesSeen(poll, vote)) busy.push(vote.name);
+        else unanswered.push(vote.name);
+      }
+      return { date, index, by: dateSuggester(poll, index), free, busy, unanswered };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
