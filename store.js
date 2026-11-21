@@ -25,11 +25,12 @@ async function connect() {
 
 const pollRef = (id) => firestore.doc(db, "polls", id);
 
-export async function createPoll({ title, dates, activities }) {
+export async function createPoll({ title, description, dates, activities }) {
   await connect();
   const ref = firestore.doc(firestore.collection(db, "polls"));
   await firestore.setDoc(ref, {
     title,
+    ...(description ? { description } : {}),
     createdAt: Date.now(),
     dates,
     dateBy: dates.map(() => null),

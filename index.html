@@ -20,6 +20,10 @@
           <label for="poll-title">Title</label>
           <input id="poll-title" type="text" placeholder="e.g. Hangout this weekend" maxlength="80">
 
+          <label for="poll-description" class="sub-label">Description <span class="optional">(optional)</span></label>
+          <textarea id="poll-description" rows="3" maxlength="300" placeholder="e.g. Let's celebrate Sam's birthday! Pick what you'd enjoy and when you're free."></textarea>
+          <p class="hint char-count" id="description-count" aria-live="polite">0 / 300</p>
+
           <fieldset>
             <legend>Date / time options</legend>
             <div id="date-inputs" class="input-list"></div>
@@ -46,6 +50,18 @@
     <!-- Poll: vote + results -->
     <section id="poll-view" hidden>
       <h1 id="poll-heading"></h1>
+      <p id="poll-description-text" class="poll-description" hidden></p>
+
+      <div class="card share-card" id="share-card">
+        <p class="share-intro" id="share-intro">Share this poll with your friends:</p>
+        <div class="input-row">
+          <label for="share-link" class="visually-hidden">Poll link</label>
+          <input id="share-link" type="text" readonly>
+          <button type="button" class="secondary" id="copy-link">Copy link</button>
+        </div>
+        <button type="button" class="secondary share-native" id="native-share" hidden>Share…</button>
+        <p id="copy-status" class="success" role="status" hidden></p>
+      </div>
 
       <div class="card">
         <h2>Vote</h2>
@@ -61,7 +77,7 @@
 
             <label for="suggestion" class="sub-label">Have another idea?</label>
             <div class="input-row" id="suggestion-row">
-              <input id="suggestion" type="text" placeholder="e.g. Mini golf" maxlength="60">
+              <input id="suggestion" type="text" placeholder="e.g. Swing Dancing" maxlength="60">
               <button type="button" class="secondary" id="add-suggestion">Add</button>
             </div>
             <p id="suggestion-error" class="error" hidden></p>
@@ -87,7 +103,7 @@
 
       <div class="card">
         <h2>Results</h2>
-        <p id="no-votes" class="muted">No votes yet.</p>
+        <p id="no-votes" class="muted">No votes yet. Results appear here as soon as someone votes. Share the link above to get things started.</p>
         <div id="results" hidden>
           <div class="summary">
             <div class="summary-item">
@@ -119,7 +135,7 @@
 
       <div class="card" id="merge-card" hidden>
         <h2>Combine activities</h2>
-        <p class="hint">Two activities that are the same thing, like "Mini golf" and "Minigolf"? Combine them so their votes count together.</p>
+        <p class="hint">Two activities that are the same thing, like "Swing dancing" and "Swing dance"? Combine them so their votes count together.</p>
         <form id="merge-form" novalidate>
           <div class="merge-grid">
             <div>

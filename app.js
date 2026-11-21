@@ -50,6 +50,79 @@ function errorMessage(error) {
   return "Couldn't save. Check your connection and try again.";
 }
 
+// Shows an error under a form, outlines the field in red, and moves the cursor to it.
+function fieldError(input, messageNode, text) {
+  showMessage(messageNode, text);
+  if (!input) return;
+  input.setAttribute("aria-invalid", "true");
+  input.setAttribute("aria-describedby", messageNode.id);
+  input.focus({ preventScroll: true });
+  input.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+// The red outline goes away as soon as the person changes the field.
+document.addEventListener("input", (event) => {
+  if (event.target.getAttribute && event.target.getAttribute("aria-invalid")) {
+    event.target.removeAttribute("aria-invalid");
+  }
+});
+
+// ---------- Sharing a poll's link ----------
+
+let justCreatedId = null; // set right after this device creates a poll
+let copyStatusTimer = null;
+
+function pollLink(id) {
+  return `${location.origin}${location.pathname}#poll-${id}`;
+}
+
+function renderShare(poll) {
+  const created = justCreatedId === poll.id;
+  justCreatedId = null;
+  $("share-link").value = pollLink(poll.id);
+  $("share-card").classList.toggle("just-created", created);
+  $("share-intro").textContent = created
+    ? "Poll created! Send this link to your friends so they can vote:"
+    : "Share this poll with your friends:";
+  $("native-share").hidden = typeof navigator.share !== "function";
+  showMessage($("copy-status"), "");
+}
+
+function showCopyStatus(text) {
+  clearTimeout(copyStatusTimer);
+  showMessage($("copy-status"), text);
+  copyStatusTimer = setTimeout(() => showMessage($("copy-status"), ""), 5000);
+}
+
+$("copy-link").addEventListener("click", async () => {
+  const field = $("share-link");
+  try {
+    await navigator.clipboard.writeText(field.value);
+    showCopyStatus("Link copied! Paste it into your group chat.");
+  } catch {
+    // Older browsers: select the text and try the old copy command.
+    field.focus();
+    field.select();
+    const copied = document.execCommand && document.execCommand("copy");
+    showCopyStatus(copied ? "Link copied! Paste it into your group chat." : "The link is selected. Press and hold it (or use Ctrl+C) to copy.");
+  }
+});
+
+$("share-link").addEventListener("focus", (event) => event.target.select());
+
+$("native-share").addEventListener("click", async () => {
+  if (!currentPoll) return;
+  try {
+    await navigator.share({
+      title: currentPoll.title,
+      text: `Vote on "${currentPoll.title}" so we can pick what to do and when:`,
+      url: pollLink(currentPoll.id),
+    });
+  } catch {
+    // The person closed the share menu, or sharing isn't allowed here: nothing to do.
+  }
+});
+
 // ---------- Polls opened on this device (a per-device convenience only) ----------
 
 const RECENT_KEY = "hangoutRecentPolls";
@@ -353,7 +426,13 @@ function attachEmojiPicker(row, input) {
 function addInputRow(container, type, placeholder) {
   const input = el("input", { type, placeholder });
   if (type === "text") input.maxLength = 60;
-  const remove = el("button", { type: "button", class: "remove-btn", "aria-label": "Remove", text: "×" });
+  const isDate = type === "datetime-local";
+  const remove = el("button", {
+    type: "button",
+    class: isDate ? "remove-btn remove-date" : "remove-btn",
+    "aria-label": isDate ? "Remove this date" : "Remove this activity",
+    text: isDate ? "× Remove" : "×",
+  });
   const row = el("div", { class: "input-row" }, input, remove);
   const wrap = el("div", { class: "input-wrap" }, row);
   container.append(wrap);
@@ -361,8 +440,17 @@ function addInputRow(container, type, placeholder) {
   remove.addEventListener("click", () => wrap.remove());
 }
 
+function updateDescriptionCount() {
+  const box = $("poll-description");
+  $("description-count").textContent = `${box.value.length} / ${box.maxLength}`;
+}
+
+$("poll-description").addEventListener("input", updateDescriptionCount);
+
 function resetCreateForm() {
   $("poll-title").value = "";
+  $("poll-description").value = "";
+  updateDescriptionCount();
   $("date-inputs").innerHTML = "";
   $("activity-inputs").innerHTML = "";
   for (let i = 0; i < 2; i++) addInputRow($("date-inputs"), "datetime-local");
@@ -397,21 +485,26 @@ $("add-activity").addEventListener("click", () => addInputRow($("activity-inputs
 $("create-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const title = $("poll-title").value.trim();
+  const description = $("poll-description").value.trim();
   const dates = collectValues($("date-inputs"));
   const activities = collectValues($("activity-inputs"));
 
-  let error = "";
-  if (!title) error = "Please give your poll a title.";
-  else if (dates.length === 0) error = "Please add at least one date/time option.";
-  else if (activities.some((name) => !withoutEmoji(name))) error = "Give each activity a name, not just an emoji.";
-  if (error) return showMessage($("create-error"), error);
+  const errorBox = $("create-error");
+  if (!title) return fieldError($("poll-title"), errorBox, "Give your poll a title, like \"Hangout this weekend\".");
+  if (dates.length === 0) {
+    return fieldError($("date-inputs").querySelector("input"), errorBox, "Add at least one date and time so friends can say when they're free.");
+  }
+  const emojiOnly = [...$("activity-inputs").querySelectorAll('input[type="text"]')]
+    .find((input) => input.value.trim() && !withoutEmoji(input.value));
+  if (emojiOnly) return fieldError(emojiOnly, errorBox, "Give each activity a name, not just an emoji.");
 
-  showMessage($("create-error"), "");
+  showMessage(errorBox, "");
   $("create-submit").disabled = true;
   $("create-submit").textContent = "Creating…";
   try {
-    const id = await createPoll({ title, dates: dates.sort(), activities });
+    const id = await createPoll({ title, description, dates: dates.sort(), activities });
     rememberPoll(id, title);
+    justCreatedId = id;
     location.hash = `poll-${id}`;
   } catch (err) {
     showMessage($("create-error"), errorMessage(err));
@@ -496,11 +589,12 @@ const suggestionPicker = attachEmojiPicker($("suggestion-row"), $("suggestion"))
 function addSuggestion() {
   const input = $("suggestion");
   const name = input.value.trim();
-  showMessage($("suggestion-error"), "");
-  if (!name) return;
-  if (!withoutEmoji(name)) return showMessage($("suggestion-error"), "Give your idea a name, not just an emoji.");
+  const errorBox = $("suggestion-error");
+  showMessage(errorBox, "");
+  if (!name) return fieldError(input, errorBox, `Type an idea first, like "${exampleIdea}".`);
+  if (!withoutEmoji(name)) return fieldError(input, errorBox, "Give your idea a name, not just an emoji.");
   const existing = draftRanking.find((item) => sameText(item.name, name));
-  if (existing) return showMessage($("suggestion-error"), `"${existing.name}" is already on the list.`);
+  if (existing) return fieldError(input, errorBox, `"${existing.name}" is already on the list. Move it up instead.`);
   draftRanking.push({ name, isNew: true });
   input.value = "";
   suggestionPicker.update();
@@ -568,10 +662,11 @@ function syncDraftDates(poll) {
 function addDateSuggestion() {
   const input = $("date-suggestion");
   const value = input.value;
-  showMessage($("date-suggestion-error"), "");
-  if (!value) return showMessage($("date-suggestion-error"), "Pick a date and time first.");
+  const errorBox = $("date-suggestion-error");
+  showMessage(errorBox, "");
+  if (!value) return fieldError(input, errorBox, "Pick a date and a time first.");
   if (draftDates.some((d) => d.date === value)) {
-    return showMessage($("date-suggestion-error"), `${formatDate(value)} is already on the list.`);
+    return fieldError(input, errorBox, `${formatDate(value)} is already on the list. Tick it instead.`);
   }
   draftDates.push({ date: value, checked: true, isNew: true });
   input.value = "";
@@ -586,7 +681,16 @@ $("date-suggestion").addEventListener("keydown", (event) => {
   }
 });
 
+// Example text in the empty name and idea boxes, picked at random each time a poll opens.
+const EXAMPLE_IDEAS = ["Swing Dancing", "Moon Knight", "Secret Hitler", "Bananagrams", "Tunnel Singing", "Foosball"];
+const EXAMPLE_NAMES = ["Sarah", "Alex", "Tyler", "Ezra", "Henry", "Wilson", "Ariana", "Lexie", "Lia", "Hazel", "Benson", "Shgloopy"];
+const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+let exampleIdea = EXAMPLE_IDEAS[0];
+
 function resetVoteForm(poll) {
+  exampleIdea = pickOne(EXAMPLE_IDEAS);
+  $("suggestion").placeholder = `e.g. ${exampleIdea}`;
+  $("voter-name").placeholder = `e.g. ${pickOne(EXAMPLE_NAMES)}`;
   $("voter-name").value = "";
   $("suggestion").value = "";
   suggestionPicker.update();
@@ -599,12 +703,16 @@ function resetVoteForm(poll) {
   showMessage($("suggestion-error"), "");
   showMessage($("date-suggestion-error"), "");
   showMessage($("vote-error"), "");
+  for (const field of $("vote-form").querySelectorAll('[aria-invalid="true"]')) field.removeAttribute("aria-invalid");
 }
 
 // First time a poll is shown: build everything.
 function renderPoll(poll) {
   $("poll-heading").textContent = poll.title;
+  $("poll-description-text").textContent = poll.description || "";
+  $("poll-description-text").hidden = !poll.description;
   document.title = `${poll.title} · Hangout Poll`;
+  renderShare(poll);
   resetVoteForm(poll);
   showMessage($("vote-success"), "");
   showMessage($("merge-success"), "");
@@ -626,18 +734,22 @@ $("vote-form").addEventListener("submit", async (event) => {
   showMessage($("vote-success"), "");
   if (!currentPoll) return;
 
+  const errorBox = $("vote-error");
   const name = $("voter-name").value.trim();
-  if (!name) return showMessage($("vote-error"), "Please type your name.");
-  if (currentPoll.votes.some((vote) => sameText(vote.name, name))) {
-    return showMessage($("vote-error"), `"${name}" has already voted on this poll. Try a different name.`);
+  if (!name) return fieldError($("voter-name"), errorBox, "Type your name so friends know whose vote this is.");
+  if (!withoutEmoji(name)) return fieldError($("voter-name"), errorBox, "Type your name, not just an emoji.");
+  const existing = currentPoll.votes.find((vote) => sameText(vote.name, name));
+  if (existing) {
+    return fieldError($("voter-name"), errorBox,
+      `"${existing.name}" has already voted. If that's you, your vote is counted. If not, add a last initial, like "${existing.name} B".`);
   }
   if ($("suggestion").value.trim()) {
-    return showMessage($("vote-error"), "You typed an idea but didn't add it. Click Add, or clear the box.");
+    return fieldError($("suggestion"), errorBox, "You typed an idea but didn't add it. Tap Add next to it, or clear the box.");
   }
   if ($("date-suggestion").value) {
-    return showMessage($("vote-error"), "You picked a time but didn't add it. Click Add next to it, or clear it.");
+    return fieldError($("date-suggestion"), errorBox, "You picked a time but didn't add it. Tap Add next to it, or clear it.");
   }
-  showMessage($("vote-error"), "");
+  showMessage(errorBox, "");
 
   const button = $("vote-submit");
   button.disabled = true;

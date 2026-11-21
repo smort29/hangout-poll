@@ -443,6 +443,88 @@ select {
   cursor: pointer;
 }
 
+/* ---------- Poll description ---------- */
+
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  resize: vertical;
+}
+
+.sub-label { display: block; }
+.char-count { margin: 4px 0 0; text-align: right; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+
+.poll-description {
+  margin: -8px 0 16px;
+  max-width: 65ch;
+  color: var(--muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Milestone 4: sharing, field errors, phones ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.share-intro { margin: 0 0 8px; font-weight: 600; }
+.share-card.just-created { border-color: var(--success); }
+.share-card.just-created .share-intro { color: var(--success); }
+.share-card input { font-size: 0.9rem; color: var(--muted); }
+.share-native { width: 100%; margin-top: 8px; padding: 10px; }
+.share-card .success { margin-top: 8px; }
+
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--error);
+  box-shadow: 0 0 0 1px var(--error);
+}
+
+/* Bigger tap targets on touch screens. */
+@media (pointer: coarse) {
+  .icon-btn { width: 44px; height: 44px; }
+  .remove-btn, .emoji-btn { min-width: 44px; min-height: 44px; }
+  .link-btn { padding: 8px 0; }
+  .secondary { min-height: 44px; }
+}
+
+/* Date/time pickers won't shrink below about 260px, so on narrow phones the button
+   next to one moves onto its own line instead of pushing the page wider. */
+.input-row { flex-wrap: wrap; }
+.input-row input[type="datetime-local"] { flex: 1 1 240px; }
+#add-date-suggestion { flex: 1 0 auto; min-height: 44px; }
+
+/* In the create form, a date row's remove button is a small text button on the right. */
+.remove-btn.remove-date {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+/* Very narrow phones: tighten the cards a little. */
+@media (max-width: 360px) {
+  .card { padding: 12px; }
+  .rank-item { gap: 6px; padding-left: 8px; }
+  .rank-controls { gap: 2px; }
+}
+
 #rankings-table td:last-child,
 #rankings-table th:last-child { text-align: left; white-space: pre; }
 a { color: var(--accent); }
