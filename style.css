@@ -379,6 +379,20 @@ select {
 
 .emoji-option:hover { background: var(--accent-soft); }
 
+.emoji-heading {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.emoji-heading:first-child { margin-top: 0; }
+
+.emoji-panel { max-height: 280px; overflow-y: auto; }
+
 .emoji-none {
   grid-column: 1 / -1;
   height: 32px;

@@ -134,10 +134,29 @@ function route() {
 
 // ---------- Emoji picker for activity names ----------
 
-const ACTIVITY_EMOJI = [
-  "🎳", "🍕", "🍔", "🌮", "🍣", "🍜", "☕", "🍻", "🍷", "🍿", "🎬", "🎤",
-  "🎮", "🎲", "🧩", "⛳", "🏀", "⚽", "🎾", "🏓", "🥾", "🚴", "🏊", "🏖️",
-  "🎡", "🛍️", "🎨", "🎵", "🎭", "📚", "🧘", "🔥",
+const EMOJI_GROUPS = [
+  {
+    label: "Activities",
+    emoji: [
+      "🎳", "🍕", "🍔", "🌮", "🍣", "🍜", "☕", "🍻", "🍷", "🍿", "🎬", "🎤",
+      "🎮", "🎲", "🧩", "⛳", "🏀", "⚽", "🎾", "🏓", "🥾", "🚴", "🏊", "🏖️",
+      "🎡", "🛍️", "🎨", "🎵", "🎭", "📚", "🧘", "🔥",
+    ],
+  },
+  {
+    label: "Faces",
+    emoji: [
+      "😀", "😂", "🥹", "😍", "🥳", "😎", "🤩", "😋", "😴", "🤔", "🙃", "😅",
+      "😬", "😱", "🥶", "🥵", "🤯", "😤", "🫠", "🤠", "🤓", "😈", "💀", "🗿",
+    ],
+  },
+  {
+    label: "Gestures & poses",
+    emoji: [
+      "👍", "👎", "👏", "🙌", "🙏", "🤝", "✌️", "🤞", "👋", "💪", "🫶", "🤘",
+      "🙋", "🤷", "🙆", "🙅", "🕺", "💃", "🏃", "🚶", "🧍", "🤸", "🛌", "🧎",
+    ],
+  },
 ];
 
 const LEADING_EMOJI = /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]+\s*)+/u;
@@ -175,10 +194,13 @@ function attachEmojiPicker(row, input) {
     input.focus();
   };
 
-  for (const emoji of ACTIVITY_EMOJI) {
-    const option = el("button", { type: "button", class: "emoji-option", "aria-label": emoji, text: emoji });
-    option.addEventListener("click", () => choose(emoji));
-    panel.append(option);
+  for (const group of EMOJI_GROUPS) {
+    panel.append(el("span", { class: "emoji-heading", text: group.label }));
+    for (const emoji of group.emoji) {
+      const option = el("button", { type: "button", class: "emoji-option", "aria-label": emoji, text: emoji });
+      option.addEventListener("click", () => choose(emoji));
+      panel.append(option);
+    }
   }
   const none = el("button", { type: "button", class: "emoji-option emoji-none", text: "No emoji" });
   none.addEventListener("click", () => choose(""));
