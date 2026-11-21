@@ -11,7 +11,11 @@ export class UserError extends Error {}
 
 // Removes emoji so "🎳 Bowling" and "bowling" count as the same activity.
 export const withoutEmoji = (text) =>
-  text.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]/gu, "").replace(/\s+/g, " ").trim();
+  text
+    .replace(/[#*0-9]️?⃣/gu, "") // keycaps such as #️⃣ and 1️⃣
+    .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}‍️\u{E0020}-\u{E007F}]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 export const sameText = (a, b) => withoutEmoji(a).toLowerCase() === withoutEmoji(b).toLowerCase();
 

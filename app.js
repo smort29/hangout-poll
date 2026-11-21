@@ -134,32 +134,47 @@ function route() {
 
 // ---------- Emoji picker for activity names ----------
 
-const EMOJI_GROUPS = [
-  {
-    label: "Activities",
-    emoji: [
-      "🎳", "🍕", "🍔", "🌮", "🍣", "🍜", "☕", "🍻", "🍷", "🍿", "🎬", "🎤",
-      "🎮", "🎲", "🧩", "⛳", "🏀", "⚽", "🎾", "🏓", "🥾", "🚴", "🏊", "🏖️",
-      "🎡", "🛍️", "🎨", "🎵", "🎭", "📚", "🧘", "🔥",
-    ],
-  },
-  {
-    label: "Faces",
-    emoji: [
-      "😀", "😂", "🥹", "😍", "🥳", "😎", "🤩", "😋", "😴", "🤔", "🙃", "😅",
-      "😬", "😱", "🥶", "🥵", "🤯", "😤", "🫠", "🤠", "🤓", "😈", "💀", "🗿",
-    ],
-  },
-  {
-    label: "Gestures & poses",
-    emoji: [
-      "👍", "👎", "👏", "🙌", "🙏", "🤝", "✌️", "🤞", "👋", "💪", "🫶", "🤘",
-      "🙋", "🤷", "🙆", "🙅", "🕺", "💃", "🏃", "🚶", "🧍", "🤸", "🛌", "🧎",
-    ],
-  },
+// Quick picks shown first. Every other standard emoji is in emoji-data.js, which loads
+// the first time someone opens a picker so the app itself stays quick to load.
+const POPULAR_EMOJI = [
+  // Hearts and stars
+  "❤️", "🧡", "💛", "💚", "💙", "💜", "🤎", "🖤", "🤍", "💖", "💕", "💝",
+  "⭐", "🌟", "✨", "💫",
+  // Celebrations
+  "🎉", "🎊", "🥳", "🎈", "🎁", "🎂", "🍰", "🧁", "🍾", "🥂",
+  // Dancing
+  "💃", "🕺", "👯", "🪩",
+  // Movies
+  "🎬", "🎥", "📽️", "🎞️", "🎦", "🍿", "🎟️", "🎫", "📺",
+  // Board and card games
+  "🎲", "♟️", "🧩", "🃏", "🀄", "🎴",
+  // Going out and activities
+  "🎳", "🍕", "🍔", "🌮", "🍣", "🫛", "☕", "🍻", "🍷", "🎤", "🎮", "⛳",
+  "🏖️", "🛍️", "🎨", "🎵", "🥾", "🧘",
+  // Faces and gestures
+  "😀", "😂", "😍", "😎", "🤩", "🗿", "👍", "🙌", "🙏", "🤝", "🔥", "💯",
 ];
 
-const LEADING_EMOJI = /^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]+\s*)+/u;
+// Some emoji come with or without an invisible "show as emoji" marker (U+FE0F); compare without it.
+const bareEmoji = (emoji) => emoji.replace(/\uFE0F/g, "");
+const POPULAR_SET = new Set(POPULAR_EMOJI.map(bareEmoji));
+
+let emojiDataPromise = null;
+function loadEmojiData() {
+  if (!emojiDataPromise) {
+    emojiDataPromise = import("./emoji-data.js")
+      .then((module) => module.EMOJI_CATEGORIES)
+      .catch((error) => {
+        emojiDataPromise = null; // let the next open try again
+        throw error;
+      });
+  }
+  return emojiDataPromise;
+}
+
+// One emoji: a pictograph, flag letter, skin tone, joiner, variation selector, keycap or tag character.
+const EMOJI_PART = "(?:[#*0-9]\\uFE0F?\\u20E3|[\\p{Extended_Pictographic}\\p{Regional_Indicator}\\p{Emoji_Modifier}\\u200D\\uFE0F\\u{E0020}-\\u{E007F}])";
+const LEADING_EMOJI = new RegExp(`^(?:${EMOJI_PART}+\\s*)+`, "u");
 
 function leadingEmoji(text) {
   const match = text.match(LEADING_EMOJI);
@@ -171,11 +186,28 @@ function setLeadingEmoji(input, emoji) {
   input.value = emoji ? `${emoji} ${rest}` : rest;
 }
 
-// Adds an emoji button in front of `input` (inside `row`) that opens a grid of emoji below the row.
+function emojiButton(emoji, title) {
+  const option = el("button", { type: "button", class: "emoji-option", "data-emoji": emoji, text: emoji });
+  option.setAttribute("aria-label", title || emoji);
+  if (title) option.title = title;
+  return option;
+}
+
+// Adds an emoji button in front of `input` (inside `row`). It opens a panel below the row with
+// a search box, category shortcuts and every standard emoji.
 function attachEmojiPicker(row, input) {
   const button = el("button", { type: "button", class: "emoji-btn", "aria-expanded": "false" });
-  const panel = el("div", { class: "emoji-panel", role: "group", "aria-label": "Choose an emoji" });
+  const search = el("input", { type: "search", class: "emoji-search", placeholder: "Search, e.g. cake, heart, christmas", "aria-label": "Search emoji" });
+  const nav = el("div", { class: "emoji-nav", role: "group", "aria-label": "Jump to a category" });
+  const list = el("div", { class: "emoji-list" });
+  const status = el("p", { class: "muted small emoji-status" });
+  const none = el("button", { type: "button", class: "emoji-none", text: "No emoji" });
+  const panel = el("div", { class: "emoji-panel", role: "group", "aria-label": "Choose an emoji" }, search, nav, list, status, none);
   panel.hidden = true;
+  status.hidden = true;
+
+  let categories = null; // filled once emoji-data.js has loaded
+  let built = false;
 
   const update = () => {
     const current = leadingEmoji(input.value);
@@ -186,6 +218,10 @@ function attachEmojiPicker(row, input) {
   const close = () => {
     panel.hidden = true;
     button.setAttribute("aria-expanded", "false");
+    if (search.value) {
+      search.value = "";
+      if (built) showAll();
+    }
   };
   const choose = (emoji) => {
     setLeadingEmoji(input, emoji);
@@ -194,23 +230,109 @@ function attachEmojiPicker(row, input) {
     input.focus();
   };
 
-  for (const group of EMOJI_GROUPS) {
-    panel.append(el("span", { class: "emoji-heading", text: group.label }));
-    for (const emoji of group.emoji) {
-      const option = el("button", { type: "button", class: "emoji-option", "aria-label": emoji, text: emoji });
-      option.addEventListener("click", () => choose(emoji));
-      panel.append(option);
+  function section(label, emojis) {
+    const heading = el("span", { class: "emoji-heading", text: label });
+    const grid = el("div", { class: "emoji-grid" });
+    for (const [emoji, words] of emojis) grid.append(emojiButton(emoji, words));
+    list.append(heading, grid);
+    return heading;
+  }
+
+  function addNav(icon, label) {
+    const jump = el("button", { type: "button", class: "emoji-nav-btn", "aria-label": label, title: label, text: icon });
+    jump.addEventListener("click", () => {
+      if (search.value) {
+        search.value = "";
+        showAll();
+      }
+      const heading = [...list.querySelectorAll(".emoji-heading")].find((h) => h.textContent === label);
+      if (heading) list.scrollTop = heading.offsetTop;
+    });
+    nav.append(jump);
+  }
+
+  function showAll() {
+    list.innerHTML = "";
+    nav.innerHTML = "";
+    status.hidden = true;
+    const names = new Map();
+    for (const category of categories || []) for (const [emoji, name] of category.items) names.set(bareEmoji(emoji), name);
+    section("Popular", POPULAR_EMOJI.map((e) => [e, names.get(bareEmoji(e)) || ""]));
+    addNav("⭐", "Popular");
+    if (!categories) return;
+    for (const category of categories) {
+      section(category.label, category.items);
+      addNav(category.icon, category.label);
     }
   }
-  const none = el("button", { type: "button", class: "emoji-option emoji-none", text: "No emoji" });
+
+  // Finds emoji whose name or keywords contain every search word (matching word starts).
+  // Exact names come first, then popular emoji, then names containing the words, then keyword-only matches.
+  function showSearch(query) {
+    const q = query.toLowerCase().replace(/\s+/g, " ");
+    const words = q.split(" ");
+    const found = [];
+    for (const category of categories || []) {
+      for (const [emoji, name, tags] of category.items) {
+        const nameText = " " + name;
+        const allText = nameText + " " + tags;
+        if (!words.every((w) => allText.includes(" " + w))) continue;
+        const rank = name === q ? 0 : POPULAR_SET.has(bareEmoji(emoji)) ? 1 : words.every((w) => nameText.includes(" " + w)) ? 2 : 3;
+        found.push({ rank, item: [emoji, name] });
+      }
+    }
+    const matches = found.sort((a, b) => a.rank - b.rank).slice(0, 200).map((f) => f.item);
+    list.innerHTML = "";
+    status.hidden = matches.length > 0;
+    status.textContent = `No emoji match "${query}". Try a shorter word.`;
+    if (matches.length) section("Results", matches);
+    list.scrollTop = 0;
+  }
+
+  async function build() {
+    if (built) return;
+    built = true;
+    showAll();
+    status.hidden = false;
+    status.textContent = "Loading all emoji…";
+    try {
+      categories = await loadEmojiData();
+      status.hidden = true;
+      if (search.value.trim()) showSearch(search.value.trim());
+      else showAll();
+    } catch {
+      built = false;
+      status.textContent = "Couldn't load the full emoji list. The popular ones still work.";
+    }
+  }
+
+  list.addEventListener("click", (event) => {
+    const option = event.target.closest(".emoji-option");
+    if (option) choose(option.dataset.emoji);
+  });
   none.addEventListener("click", () => choose(""));
-  panel.append(none);
+  search.addEventListener("input", () => {
+    if (!categories) return; // still loading: build() runs the search when the list arrives
+    const query = search.value.trim();
+    if (query) showSearch(query);
+    else showAll();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const first = list.querySelector(".emoji-option");
+      if (first) choose(first.dataset.emoji);
+    }
+  });
 
   button.addEventListener("click", () => {
     const opening = panel.hidden;
     panel.hidden = !opening;
     button.setAttribute("aria-expanded", String(opening));
-    if (opening) panel.querySelector("button").focus();
+    if (opening) {
+      build();
+      search.focus();
+    }
   });
   panel.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -251,7 +373,7 @@ function resetCreateForm() {
 
 function collectValues(container) {
   const values = [];
-  for (const input of container.querySelectorAll("input")) {
+  for (const input of container.querySelectorAll('input[type="text"], input[type="datetime-local"]')) {
     const value = input.value.trim();
     if (value && !values.some((v) => sameText(v, value))) values.push(value);
   }
