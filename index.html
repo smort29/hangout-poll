@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hangout Poll</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a href="#" class="brand">Hangout Poll</a>
+  </header>
+
+  <main>
+    <!-- Home: create a poll + list saved polls -->
+    <section id="home-view" hidden>
+      <div class="card">
+        <h1>Create a poll</h1>
+        <form id="create-form" novalidate>
+          <label for="poll-title">Title</label>
+          <input id="poll-title" type="text" placeholder="e.g. Hangout this weekend" maxlength="80">
+
+          <fieldset>
+            <legend>Date / time options</legend>
+            <div id="date-inputs" class="input-list"></div>
+            <button type="button" class="link-btn" id="add-date">+ Add another date</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Starter activities <span class="optional">(optional, friends can add more)</span></legend>
+            <div id="activity-inputs" class="input-list"></div>
+            <button type="button" class="link-btn" id="add-activity">+ Add another activity</button>
+          </fieldset>
+
+          <p id="create-error" class="error" hidden></p>
+          <button type="submit" class="primary" id="create-submit">Create poll</button>
+        </form>
+      </div>
+
+      <div class="card" id="poll-list-card" hidden>
+        <h2>Polls you've opened on this device</h2>
+        <ul id="poll-list" class="poll-list"></ul>
+      </div>
+    </section>
+
+    <!-- Poll: vote + results -->
+    <section id="poll-view" hidden>
+      <h1 id="poll-heading"></h1>
+
+      <div class="card">
+        <h2>Vote</h2>
+        <form id="vote-form" novalidate>
+          <label for="voter-name">Your name</label>
+          <input id="voter-name" type="text" placeholder="e.g. Alex" maxlength="40">
+
+          <fieldset>
+            <legend>Rank the activities</legend>
+            <p class="hint">Put your favorite at the top using the arrows.</p>
+            <p id="ranking-empty" class="muted" hidden>No activities yet. Add an idea below.</p>
+            <ol id="ranking-list" class="ranking"></ol>
+
+            <label for="suggestion" class="sub-label">Have another idea?</label>
+            <div class="input-row">
+              <input id="suggestion" type="text" placeholder="e.g. Mini golf" maxlength="60">
+              <button type="button" class="secondary" id="add-suggestion">Add</button>
+            </div>
+            <p id="suggestion-error" class="error" hidden></p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Which dates work for you?</legend>
+            <div id="date-choices" class="choices"></div>
+          </fieldset>
+
+          <p id="vote-error" class="error" hidden></p>
+          <p id="vote-success" class="success" hidden></p>
+          <button type="submit" class="primary" id="vote-submit">Submit vote</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Results</h2>
+        <p id="no-votes" class="muted">No votes yet.</p>
+        <div id="results" hidden>
+          <div class="summary">
+            <div class="summary-item">
+              <span class="eyebrow">Top activity</span>
+              <strong id="top-activity"></strong>
+              <span id="top-activity-note" class="muted small"></span>
+            </div>
+            <div class="summary-item">
+              <span class="eyebrow">Best date</span>
+              <strong id="best-date"></strong>
+              <span id="best-date-note" class="muted small"></span>
+            </div>
+          </div>
+
+          <h3>Activities by points</h3>
+          <p class="hint">If you rank 4 activities, your 1st choice gets 4 points, your 2nd gets 3, and so on. Ideas added after you voted get 0 points from you.</p>
+          <ol id="activity-results" class="tally"></ol>
+
+          <h3>Who is free when</h3>
+          <ol id="date-results" class="tally"></ol>
+
+          <h3>Everyone's rankings</h3>
+          <div class="table-wrap">
+            <table id="rankings-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="merge-card" hidden>
+        <h2>Combine activities</h2>
+        <p class="hint">Two activities that are the same thing, like "Mini golf" and "Minigolf"? Combine them so their votes count together.</p>
+        <form id="merge-form" novalidate>
+          <div class="merge-grid">
+            <div>
+              <label for="merge-from">Combine</label>
+              <select id="merge-from"></select>
+            </div>
+            <div>
+              <label for="merge-into">into (keep this name)</label>
+              <select id="merge-into"></select>
+            </div>
+          </div>
+          <p id="merge-error" class="error" hidden></p>
+
+          <div id="merge-confirm" class="confirm" hidden>
+            <p id="merge-confirm-text"></p>
+            <div class="confirm-actions">
+              <button type="button" class="primary danger" id="merge-yes">Yes, combine</button>
+              <button type="button" class="secondary" id="merge-cancel">Cancel</button>
+            </div>
+          </div>
+
+          <button type="submit" class="secondary merge-start" id="merge-start">Combine…</button>
+          <p id="merge-success" class="success" hidden></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="loading-view" hidden>
+      <div class="card">
+        <p class="muted" id="loading-text">Loading poll…</p>
+      </div>
+    </section>
+
+    <section id="missing-view" hidden>
+      <div class="card">
+        <h1 id="missing-heading">Poll not found</h1>
+        <p id="missing-text">Check that you have the whole link. If it's right, the poll may have been removed.</p>
+        <p><a href="#">Create a new poll</a></p>
+      </div>
+    </section>
+
+    <section id="setup-view" hidden>
+      <div class="card">
+        <h1>Not connected yet</h1>
+        <p>This app saves polls in Firebase so friends can vote from their own phones, but it hasn't been connected to a Firebase project yet.</p>
+        <p class="muted">Follow the steps in SETUP.md, then paste your project's settings into firebase-config.js.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

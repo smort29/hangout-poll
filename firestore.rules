@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Security rules for Hangout Poll. Paste this into Firestore Database > Rules (see SETUP.md).
+//
+// - Anyone with a poll's link can read it, vote, suggest and combine activities.
+// - Nobody can list all polls, so a poll is only reachable through its link.
+// - Nobody can delete a poll or change its title or dates after it's created.
+// - Sizes are capped so the database can't be filled with junk.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validPoll(d) {
+      return d.keys().hasOnly(['title', 'createdAt', 'dates', 'activities', 'votes'])
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 80
+        && d.createdAt is int
+        && d.dates is list && d.dates.size() >= 1 && d.dates.size() <= 20
+        && d.activities is list && d.activities.size() <= 60
+        && d.votes is list && d.votes.size() <= 100;
+    }
+
+    match /polls/{pollId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if validPoll(request.resource.data)
+        && request.resource.data.votes.size() == 0;
+      allow update: if validPoll(request.resource.data)
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.dates == resource.data.dates
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+  }
+}
