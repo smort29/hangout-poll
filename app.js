@@ -454,7 +454,9 @@ function resetCreateForm() {
   $("date-inputs").innerHTML = "";
   $("activity-inputs").innerHTML = "";
   for (let i = 0; i < 2; i++) addInputRow($("date-inputs"), "datetime-local");
-  for (let i = 0; i < 2; i++) addInputRow($("activity-inputs"), "text", "e.g. Bowling");
+  starterIdeas = shuffled(EXAMPLE_IDEAS);
+  starterIndex = 0;
+  for (let i = 0; i < 2; i++) addInputRow($("activity-inputs"), "text", nextStarterExample());
   showMessage($("create-error"), "");
   $("create-submit").disabled = false;
 }
@@ -480,7 +482,7 @@ function renderHome() {
 }
 
 $("add-date").addEventListener("click", () => addInputRow($("date-inputs"), "datetime-local"));
-$("add-activity").addEventListener("click", () => addInputRow($("activity-inputs"), "text", "e.g. Bowling"));
+$("add-activity").addEventListener("click", () => addInputRow($("activity-inputs"), "text", nextStarterExample()));
 
 $("create-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -686,6 +688,26 @@ const EXAMPLE_IDEAS = ["Swing Dancing", "Moon Knight", "Secret Hitler", "Bananag
 const EXAMPLE_NAMES = ["Sarah", "Alex", "Tyler", "Ezra", "Henry", "Wilson", "Ariana", "Lexie", "Lia", "Hazel", "Benson", "Shgloopy"];
 const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
 let exampleIdea = EXAMPLE_IDEAS[0];
+
+function shuffled(list) {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// Starter activity boxes on the create page each get a different example, in a shuffled order.
+let starterIdeas = [];
+let starterIndex = 0;
+function nextStarterExample() {
+  if (starterIndex >= starterIdeas.length) {
+    starterIdeas = shuffled(EXAMPLE_IDEAS);
+    starterIndex = 0;
+  }
+  return `e.g. ${starterIdeas[starterIndex++]}`;
+}
 
 function resetVoteForm(poll) {
   exampleIdea = pickOne(EXAMPLE_IDEAS);
