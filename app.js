@@ -684,7 +684,7 @@ $("date-suggestion").addEventListener("keydown", (event) => {
 });
 
 // Example text in the empty name and idea boxes, picked at random each time a poll opens.
-const EXAMPLE_IDEAS = ["Swing Dancing", "Moon Knight", "Secret Hitler", "Bananagrams", "Tunnel Singing", "Foosball"];
+const EXAMPLE_IDEAS = ["Swing Dancing", "Moon Knight", "Secret Hitler", "Bananagrams", "Tunnel Singing", "Foosball", "The Canc", "Creamery Side Quest"];
 const EXAMPLE_NAMES = ["Sarah", "Alex", "Tyler", "Ezra", "Henry", "Wilson", "Ariana", "Lexie", "Lia", "Hazel", "Benson", "Shgloopy"];
 const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
 let exampleIdea = EXAMPLE_IDEAS[0];
